@@ -79,11 +79,14 @@ class MendeleyManager:
     def extract_metadata(self, access_token, pdf_file_path):
         """Extract metadata from a PDF file."""
         try:
-            url = f"{self.base_url}/catalog"
-            headers = {"Authorization": f"Bearer {access_token}"}
+            url = f"{self.base_url}/documents"
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/pdf",
+                "Content-Disposition": f'attachment; filename="{os.path.basename(pdf_file_path)}"'
+            }
             with open(pdf_file_path, 'rb') as pdf_file:
-                files = {'file': pdf_file}
-                response = requests.post(url, headers=headers, files=files)
+                response = requests.post(url, headers=headers, data=pdf_file)
                 response.raise_for_status()
                 return response.json()
         except requests.exceptions.RequestException as e:
@@ -184,6 +187,10 @@ if __name__ == "__main__":
     CLIENT_SECRET = os.getenv("CLIENT_SECRET")
     REDIRECT_URI = os.getenv("REDIRECT_URI")
 
+    # Create a folder for JSON data
+    json_data_folder = os.path.join("mendeley_data", "json_data")
+    os.makedirs(json_data_folder, exist_ok=True)
+
     if not CLIENT_ID or not CLIENT_SECRET or not REDIRECT_URI:
         raise RuntimeError("Missing CLIENT_ID, CLIENT_SECRET, or REDIRECT_URI in environment variables")
 
@@ -216,14 +223,17 @@ if __name__ == "__main__":
     # print("Documents:", documents)
     # print("Collections:", collections)
 
-    # Export the documents to a file
-    with open("documents.json", "w") as f:
+    # Export the documents to a JSON file
+    documents_file_path = os.path.join(json_data_folder, "documents.json")
+    with open(documents_file_path, "w") as f:
         json.dump(documents, f, indent=2)
-    print("Documents exported to documents.json")
+    print(f"Documents exported to {documents_file_path}")
 
-    with open("collections.json", "w") as f:
+    # Export the collections to a JSON file
+    collections_file_path = os.path.join(json_data_folder, "collections.json")
+    with open(collections_file_path, "w") as f:
         json.dump(collections, f, indent=2)
-    print("Collections exported to collections.json")
+    print(f"Collections exported to {collections_file_path}")
 
     # Display collections and prompt user to select one
     print("Available collections:")
@@ -257,10 +267,11 @@ if __name__ == "__main__":
         else:
             print("  - No files attached.")
     
-    # Export the collection data to a file
-    with open(f"{slugified_collection_name}_data.json", "w") as f:
+    # Export the collection data to a JSON file
+    collection_data_file_path = os.path.join(json_data_folder, f"{slugified_collection_name}_data.json")
+    with open(collection_data_file_path, "w") as f:
         json.dump(collection_data, f, indent=2)
-    print(f"Collection data exported to {slugified_collection_name}_data.json")
+    print(f"Collection data exported to {collection_data_file_path}")
 
     # Create a folder for downloaded files
     download_folder = "mendeley_data"
@@ -287,3 +298,22 @@ if __name__ == "__main__":
             print(f"No files attached to document: {document_title}")
 
     print(f"Downloaded files: {downloaded_files}")
+
+    print("\nExtract metadata from a PDF file")
+    pdf_file_path = input("Enter the path to the PDF file: ")
+    if os.path.exists(pdf_file_path):
+        metadata = manager.extract_metadata(access_token, pdf_file_path)
+        if metadata:
+            print("Extracted Metadata:")
+            print(json.dumps(metadata, indent=2))
+    
+            # Export the metadata to a JSON file
+            metadata_file_name = os.path.splitext(os.path.basename(pdf_file_path))[0] + "_metadata.json"
+            metadata_file_path = os.path.join(json_data_folder, metadata_file_name)
+            with open(metadata_file_path, "w") as metadata_file:
+                json.dump(metadata, metadata_file, indent=2)
+            print(f"Metadata exported to {metadata_file_path}")
+        else:
+            print("Failed to extract metadata.")
+    else:
+        print("The specified file does not exist.")
